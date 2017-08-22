@@ -1,0 +1,3 @@
+References
+https://sqlite.org/cli.html
+https://gist.github.com/carlward/54ec1c91b62a5f911c42#file-sample_project-md
