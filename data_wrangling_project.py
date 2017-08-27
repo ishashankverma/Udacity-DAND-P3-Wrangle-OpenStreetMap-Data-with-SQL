@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+# Importing needed libraries
 import xml.etree.cElementTree as ET
 from collections import defaultdict
 import re
@@ -13,6 +13,12 @@ import string
 
 # Pune India OSM file
 osm_file = "pune_india.osm"
+
+#New osm file
+osm_file_2 = "pune_india_cleaned.osm"
+
+#New osm file
+osm_file_3 = "pune_india_cleaned_2.osm"
 
 # Regular Expression Function
 street_type_re = re.compile(r'\b\S+\.?$', re.IGNORECASE)
@@ -45,22 +51,6 @@ def audit(osmfile):
                     audit_street_type(street_types, tag.attrib['v'])
     osm_file.close()
     return street_types
-    
-    
-# Auditing our osm file
-st_types = audit(osm_file)
-
-# Printing results 
-pprint.pprint(dict(st_types))
-
-#Mapping the corrections
-mapping = { "Rd": "Road",
-            "raod": "Road",
-            "road": "Road",
-           }
-            
-#New osm file
-osm_file_2 = "pune_india_cleaned.osm"
 
 # Function to replace abbreviation by full name in string
 def update_name(name, mapping):
@@ -92,13 +82,7 @@ def modify_street(old_file, new_file):
                 if is_street_name(tag):
                     tag.set('v',update_name(tag.attrib['v'], mapping))
             output.write(ET.tostring(element, encoding='utf-8'))
-        output.write('</osm>')
-
-# Modifying osm file
-modify_street(osm_file, osm_file_2)
-
-# Checking tag for postcode content 
-zip_type_re = re.compile(r'\d{6}-??')
+        output.write('</osm>')    
 
 # Sorting zipcodes in different forms and save them to dict
 def audit_zip_type(zip_types, zip):
@@ -112,28 +96,20 @@ def audit_zip_type(zip_types, zip):
 
 # Checking if tag contains postcode
 def is_zip(elem):
-    return (elem.attrib['k'] == "addr:postcode")
+    return (elem.attrib['k'] == "addr:postcode" or elem.attrib['k'] == "postal_code")
 
 # Auditing file for different variations of same zip 
 def zip_audit(osmfile):
     osm_file = open(osmfile, "r")    
     zip_types = defaultdict(set)
+    
     for event, elem in ET.iterparse(osm_file, events=("start",)):
         if elem.tag == "node" or elem.tag == "way":
             for tag in elem.iter("tag"):
                 if is_zip(tag):
-                    audit_zip_type(zip_types, tag.attrib['v'])                
+                    audit_zip_type(zip_types, tag.attrib['v'])     
     osm_file.close()
     return zip_types
-    
-# Auditing our osm file
-zp_types = zip_audit(osm_file_2)
-
-# Printing results 
-pprint.pprint(dict(zp_types))
-
-#New osm file
-osm_file_3 = "pune_india_cleaned_2.osm"
 
 # Function to replace abbreviation in zip
 def update_zip(zip):
@@ -142,7 +118,7 @@ def update_zip(zip):
         return m.group()
     else:
         return 'unknown'
-
+   
 # This function corrects the zip in osm file
 def modify_zip(old_file, new_file):
     with open(new_file, 'wb') as output:
@@ -151,13 +127,12 @@ def modify_zip(old_file, new_file):
         for i, element in enumerate(get_element(old_file)):
             for tag in element.iter("tag"):
                 if is_zip(tag):
-                    str(tag).replace(" ", "")
+                    tag.set('v', str(tag.attrib['v']).replace(" ", ""))
+                    tag.set('k', "addr:postcode")
                     tag.set('v',update_zip(tag.attrib['v']))
+                    #print ET.tostring(tag, encoding='utf-8')
             output.write(ET.tostring(element, encoding='utf-8'))
         output.write('</osm>')
-
-# Modifying osm file
-modify_zip(osm_file_2, osm_file_3)
 
 #Preparing for Database - SQL
 
@@ -172,7 +147,7 @@ WAY_TAGS_PATH = "ways_tags.csv"
 LOWER_COLON = re.compile(r'^([a-z]|_)+:([a-z]|_)+')
 PROBLEMCHARS = re.compile(r'[=\+/&<>;\'"\?%#$@\,\. \t\r\n]')
 
-# Importing schema for pransformation from schema.py file
+# Importing schema for transformation from schema.py file
 SCHEMA = schema.schema
 
 # Fields of new csv files
@@ -268,7 +243,6 @@ def validate_element(element, validator, schema=SCHEMA):
             message_string.format(field, "\n".join(error_strings))
         )
 
-
 # Extend csv.DictWriter to handle Unicode input
 class UnicodeDictWriter(csv.DictWriter, object):
     def writerow(self, row):
@@ -317,8 +291,35 @@ def process_map(file_in, validate):
                     ways_writer.writerow(el['way'])
                     way_nodes_writer.writerows(el['way_nodes'])
                     way_tags_writer.writerows(el['way_tags'])
+					
+# Auditing our osm file
+st_types = audit(osm_file)
+
+# Printing results 
+pprint.pprint(dict(st_types))
+
+#Mapping the corrections
+mapping = { "Rd": "Road",
+            "raod": "Road",
+            "road": "Road",
+           }
+            
+# Modifying osm file
+modify_street(osm_file, osm_file_2)
+
+# Checking tag for postcode content 
+zip_type_re = re.compile(r'\d{6}-??')
+    
+# Auditing our osm file
+zp_types = zip_audit(osm_file_2)
+
+# Printing results 
+pprint.pprint(dict(zp_types))
+
+# Modifying osm file
+modify_zip(osm_file_2, osm_file_3)
                     
 # Note: Validation is ~ 10X slower. Consider using a small
 # sample of the map when validating.
+# We're passing the latest file here, so we don't need to call the update_name function again.
 process_map(osm_file_3, validate=True)
-
